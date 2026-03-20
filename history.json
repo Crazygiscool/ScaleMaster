@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "start_time": "2026-03-20T19:36:29.073232",
+    "total_duration_minutes": 1,
+    "blocks": [
+      {
+        "task_name": "G# Lydian b7",
+        "duration_seconds": 60,
+        "is_completed": false
+      },
+      {
+        "task_name": "Session Complete",
+        "duration_seconds": 60,
+        "is_completed": true
+      }
+    ]
+  }
+]
