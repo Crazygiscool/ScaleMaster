@@ -15,5 +15,22 @@
         "is_completed": true
       }
     ]
+  },
+  {
+    "id": 1,
+    "start_time": "2026-03-20T19:45:39.917004",
+    "total_duration_minutes": 1,
+    "blocks": [
+      {
+        "task_name": "A Harmonic Minor",
+        "duration_seconds": 60,
+        "is_completed": false
+      },
+      {
+        "task_name": "Session Complete",
+        "duration_seconds": 60,
+        "is_completed": true
+      }
+    ]
   }
 ]

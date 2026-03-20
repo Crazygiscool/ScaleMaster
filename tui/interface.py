@@ -37,7 +37,7 @@ class SaxMasterTUI(App):
         yield Header()
         with Vertical():
             yield Label("Enter practice time (minutes):")
-            yield Input(placeholder="20", id="time_input", type="integer")
+            yield Input(placeholder="20", id="time_input", type="integer", value="20")
             yield Button("START SESSION", id="start_btn", variant="success")
             yield Button("METRONOME SETTINGS (S)", id="settings_btn", variant="default")
 
@@ -145,7 +145,8 @@ class SaxMasterTUI(App):
 
     async def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "start_btn":
-            mins = self.query_one("#time_input").value or "1"
+            input_val = self.query_one("#time_input").value
+            mins = input_val.strip() if input_val else "1"
             asyncio.create_task(self.action_start_timer(mins))
         elif event.button.id == "next_btn":
             self.action_new_scale()
