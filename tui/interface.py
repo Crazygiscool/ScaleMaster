@@ -1,6 +1,7 @@
 import asyncio
-import winsound
+import subprocess
 import sys
+import platform
 
 from app.engine import ScaleEngine
 from app.practice import save_session
@@ -72,10 +73,20 @@ class SaxMasterTUI(App):
         self.query_one("#display").update("Session saved to history.json")
 
     def play_click(self):
-        if sys.platform == "win":
+        if sys.platform == "win32":
+            import winsound
+
             winsound.Beep(800, 100)
+        elif sys.platform == "darwin":
+            subprocess.run(
+                ["say", "-v", "Boing", "-r", "200", "."], capture_output=True
+            )
         else:
-            print("\a", end="", flush=True)
+            try:
+                subprocess.run(["paplay"], input=b"\x00", capture_output=True)
+            except FileNotFoundError:
+                sys.stdout.write("\a")
+                sys.stdout.flush()
 
     def action_new_scale(self):
         scale = ScaleEngine.generate()
