@@ -14,7 +14,7 @@ from textual.widgets import Button, Digits, Footer, Header, Input, Label, Static
 class SaxMasterTUI(App):
     CSS = """
     #timer-container { align: center middle; border: double green; margin: 1; padding: 1; }
-    #display { text-align: center; font-size: 150%; color: cyan; margin: 1; }
+    #display { text-align: center; color: cyan; margin: 1; }
     Input { width: 20%; margin: 1; }
     """
 
