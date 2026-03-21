@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Scale, MetronomeSettings, SessionSegment } from "@/types/scale";
 import { SEGMENT_DEFAULTS, SegmentType } from "@/types/scale";
-import { generateScale, getScaleDisplayText } from "@/lib/scale-engine";
+import { TONE_WORKOUTS, getRandomToneWorkout, ToneWorkout } from "@/lib/tone-workouts";
 import DonutChart from "./DonutChart";
 
 interface ActiveSessionProps {
@@ -42,6 +43,16 @@ export default function ActiveSession({
 }: ActiveSessionProps) {
   const activeSegment = segments.find((s) => s.isActive);
   const defaults = activeSegment ? SEGMENT_DEFAULTS[activeSegment.id as SegmentType] : null;
+  const [currentWorkout, setCurrentWorkout] = useState<ToneWorkout | null>(null);
+
+  const activeWorkout = activeSegment?.id === "warmup" && activeSegment.workoutId
+    ? TONE_WORKOUTS.find((w) => w.id === activeSegment.workoutId) || currentWorkout
+    : null;
+
+  const handleNewWorkout = () => {
+    const newWorkout = getRandomToneWorkout();
+    setCurrentWorkout(newWorkout);
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -162,27 +173,93 @@ export default function ActiveSession({
         </div>
       )}
 
-      {(activeSegment?.id === "warmup") && (
+      {activeSegment?.id === "warmup" && activeWorkout && (
         <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 mb-6">
-          <h3 className="text-lg font-bold text-orange-400 mb-4">Long Tones Exercise</h3>
-          <p className="text-gray-300 mb-4">
-            Play each note for 5-10 seconds. Focus on:
-          </p>
-          <ul className="list-disc list-inside text-gray-400 space-y-2">
-            <li>Steady air flow</li>
-            <li>Tuner showing the correct pitch</li>
-            <li>Consistent volume throughout</li>
-          </ul>
-          <p className="text-gray-500 text-sm mt-4">Click any note to play it</p>
-          {["C", "D", "E", "F", "G", "A", "B"].map((note) => (
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs font-medium rounded">
+                  {activeWorkout.techniqueFocus}
+                </span>
+              </div>
+              <h3 className="text-xl font-bold text-orange-400 mb-1">{activeWorkout.title}</h3>
+              <p className="text-gray-400 text-sm">{activeWorkout.description}</p>
+            </div>
             <button
-              key={note}
-              onClick={() => onPlayNote(note)}
-              className="inline-block m-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded transition-colors"
+              onClick={handleNewWorkout}
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded transition-colors"
             >
-              {note}
+              New Workout
             </button>
-          ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="bg-gray-800/50 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">Instructions</h4>
+              <ul className="space-y-1.5">
+                {activeWorkout.instructions.map((instruction, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-sm text-gray-400">
+                    <span className="text-orange-500 mt-0.5">{idx + 1}.</span>
+                    {instruction}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-gray-800/50 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                <span className="text-cyan-400">🎤</span> Pitch Reference
+              </h4>
+              <div className="flex flex-col items-center justify-center py-4">
+                <div className="relative w-full max-w-[200px]">
+                  <div className="h-20 bg-gray-900 rounded-lg relative overflow-hidden">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t-2 border-dashed border-gray-700" />
+                    </div>
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-600 -translate-x-1/2">
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-cyan-500 rounded-full" />
+                    </div>
+                    <div className="absolute inset-0 flex flex-col justify-between py-2 px-2">
+                      <div className="flex justify-between text-[10px] text-gray-600">
+                        <span>-50</span>
+                        <span>0</span>
+                        <span>+50</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-center text-xs text-gray-500 mt-2">Open Tuner to check pitch</p>
+                </div>
+                <div className="flex gap-2 mt-3 w-full">
+                  <button
+                    onClick={onOpenTuner}
+                    className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm rounded font-medium transition-colors"
+                  >
+                    Open Tuner
+                  </button>
+                  <button
+                    onClick={() => onPlayNote("A")}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded font-medium transition-colors"
+                    title="Play A reference"
+                  >
+                    ♪ A
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-gray-500 text-xs">Click notes below to hear reference pitches</p>
+          <div className="flex flex-wrap gap-1 mt-2">
+            {["C", "D", "E", "F", "G", "A", "B"].map((note) => (
+              <button
+                key={note}
+                onClick={() => onPlayNote(note)}
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-sm transition-colors"
+              >
+                {note}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

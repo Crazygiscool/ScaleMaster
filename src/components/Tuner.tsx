@@ -1,9 +1,17 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useTuner } from "@/hooks/useTuner";
+
+const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const OCTAVES = [2, 3, 4, 5, 6];
 
 export default function Tuner() {
   const { isListening, frequency, cents, note, octave, volume, error, startListening, stopListening, getNoteFrequency } = useTuner();
+  
+  const [targetNote, setTargetNote] = useState("A");
+  const [targetOctave, setTargetOctave] = useState(4);
+  const [isPlayingTarget, setIsPlayingTarget] = useState(false);
 
   const needlePosition = Math.max(-50, Math.min(50, cents));
 
@@ -19,9 +27,8 @@ export default function Tuner() {
     return "text-red-400";
   };
 
-  const playReference = () => {
-    if (!note) return;
-    const freq = getNoteFrequency(note, octave);
+  const playNote = useCallback((noteToPlay: string, noteOctave: number, duration: number = 2) => {
+    const freq = getNoteFrequency(noteToPlay, noteOctave);
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -30,10 +37,27 @@ export default function Tuner() {
     osc.frequency.value = freq;
     osc.type = "sine";
     gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
     osc.start();
-    osc.stop(ctx.currentTime + 1);
-  };
+    osc.stop(ctx.currentTime + duration);
+    return ctx;
+  }, [getNoteFrequency]);
+
+  const handlePlayTarget = useCallback(() => {
+    if (isPlayingTarget) return;
+    setIsPlayingTarget(true);
+    const ctx = playNote(targetNote, targetOctave, 3);
+    setTimeout(() => {
+      setIsPlayingTarget(false);
+    }, 3000);
+  }, [isPlayingTarget, playNote, targetNote, targetOctave]);
+
+  const handlePlayCurrent = useCallback(() => {
+    if (!note) return;
+    playNote(note, octave, 1.5);
+  }, [note, octave, playNote]);
+
+  const targetFreq = getNoteFrequency(targetNote, targetOctave);
 
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-3">
@@ -46,6 +70,44 @@ export default function Tuner() {
           {error}
         </div>
       )}
+
+      <div className="bg-gray-800/50 rounded-lg p-2 mb-3">
+        <label className="text-xs text-gray-400 mb-1 block">Target Pitch</label>
+        <div className="flex gap-2">
+          <select
+            value={targetNote}
+            onChange={(e) => setTargetNote(e.target.value)}
+            className="flex-1 bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600"
+          >
+            {NOTES.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <select
+            value={targetOctave}
+            onChange={(e) => setTargetOctave(parseInt(e.target.value))}
+            className="w-16 bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600"
+          >
+            {OCTAVES.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <button
+            onClick={handlePlayTarget}
+            disabled={isPlayingTarget}
+            className={`px-3 py-1 text-sm rounded font-bold transition-colors ${
+              isPlayingTarget
+                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                : "bg-cyan-600 hover:bg-cyan-500 text-white"
+            }`}
+          >
+            ▶
+          </button>
+        </div>
+        <div className="text-xs text-gray-500 mt-1 text-center">
+          {targetFreq.toFixed(1)} Hz
+        </div>
+      </div>
 
       {!isListening ? (
         <button
@@ -107,14 +169,17 @@ export default function Tuner() {
             >
               Stop
             </button>
-            {note && (
-              <button
-                onClick={playReference}
-                className="flex-1 py-1 text-xs bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-colors"
-              >
-                {note}{octave}
-              </button>
-            )}
+            <button
+              onClick={handlePlayCurrent}
+              disabled={!note}
+              className={`flex-1 py-1 text-xs rounded font-bold transition-colors ${
+                note
+                  ? "bg-green-600 hover:bg-green-500 text-white"
+                  : "bg-gray-600 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              ▶ {note || "--"}{note ? octave : ""}
+            </button>
           </div>
         </div>
       )}

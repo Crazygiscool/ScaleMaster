@@ -15,27 +15,25 @@ export default function DonutChart({ segments, size = 200 }: DonutChartProps) {
   const centerX = size / 2;
   const centerY = size / 2;
 
-  let currentOffset = 0;
-  const segmentPaths = segments.map((segment) => {
+  const segmentPaths = segments.reduce<Array<{
+    segment: SessionSegment;
+    dashArray: string;
+    dashOffset: number;
+    defaults: { color: string };
+    x: number;
+    y: number;
+  }>>((acc, segment) => {
     const segmentLength = (segment.percentage / totalPercentage) * circumference;
+    const currentOffset = acc.reduce((sum, s) => sum + (s.segment.percentage / totalPercentage) * circumference, 0);
     const dashArray = `${segmentLength} ${circumference - segmentLength}`;
     const dashOffset = -currentOffset;
-    currentOffset += segmentLength;
 
     const defaults = SEGMENT_DEFAULTS[segment.id as SegmentType];
-    const midAngle = dashOffset + segmentLength / 2;
     const x = centerX + (radius * 0.7) * Math.sin((dashOffset / circumference) * 2 * Math.PI + (segmentLength / circumference) * Math.PI);
     const y = centerY - (radius * 0.7) * Math.cos((dashOffset / circumference) * 2 * Math.PI + (segmentLength / circumference) * Math.PI);
 
-    return {
-      segment,
-      dashArray,
-      dashOffset,
-      defaults,
-      x,
-      y,
-    };
-  });
+    return [...acc, { segment, dashArray, dashOffset, defaults, x, y }];
+  }, []);
 
   return (
     <div className="relative" style={{ width: size, height: size }}>

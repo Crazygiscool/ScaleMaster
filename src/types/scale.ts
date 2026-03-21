@@ -39,6 +39,8 @@ export interface SessionSegment {
   isActive: boolean;
   isCompleted: boolean;
   elapsedSeconds: number;
+  workoutId?: string;
+  etudeStyleId?: string;
 }
 
 export interface PracticeSessionConfig {

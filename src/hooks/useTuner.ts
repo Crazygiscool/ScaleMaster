@@ -30,7 +30,7 @@ export function useTuner() {
     const nearestHalfStep = Math.round(halfStepsFromA4);
     const centsOff = Math.round((halfStepsFromA4 - nearestHalfStep) * 100);
     
-    let noteIndex = ((nearestHalfStep % 12) + 12) % 12;
+    const noteIndex = ((nearestHalfStep % 12) + 12) % 12;
     const noteOctave = 4 + Math.floor((nearestHalfStep + 9) / 12);
     
     const adjustedNoteIndex = (noteIndex + 9) % 12;

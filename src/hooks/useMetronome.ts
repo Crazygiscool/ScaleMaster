@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { MetronomeSettings } from "@/types/scale";
 
 export function useMetronome(settings: MetronomeSettings, isRunning: boolean) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const beatRef = useRef(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const isPlaying = isRunning;
 
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -51,9 +51,6 @@ export function useMetronome(settings: MetronomeSettings, isRunning: boolean) {
       beatRef.current = 0;
       playClick();
       intervalRef.current = setInterval(playClick, intervalMs);
-      setIsPlaying(true);
-    } else {
-      setIsPlaying(false);
     }
 
     return () => {
