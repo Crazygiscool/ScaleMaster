@@ -1,11 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Scale, MetronomeSettings } from "@/types/scale";
-import { generateScale, getScaleDisplayText } from "@/lib/scale-engine";
+import { Scale, MetronomeSettings, SessionSegment, SEGMENT_DEFAULTS } from "@/types/scale";
+import { generateScale } from "@/lib/scale-engine";
 import { useMetronome } from "@/hooks/useMetronome";
 import { usePlayNote } from "@/hooks/usePlayNote";
 import MetronomeSettingsModal from "@/components/MetronomeSettings";
+import SessionCreator from "@/components/SessionCreator";
+import ActiveSession from "@/components/ActiveSession";
+import SessionSummary from "@/components/SessionSummary";
+
+type AppView = "creator" | "active" | "summary";
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
   tone: 800,
@@ -15,178 +20,264 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   enabled: false,
 };
 
+function createSegments(totalMinutes: number): SessionSegment[] {
+  const segmentTypes = ["warmup", "technical", "written", "performance"] as const;
+  return segmentTypes.map((type) => {
+    const defaults = SEGMENT_DEFAULTS[type];
+    const durationSeconds = Math.round((defaults.percentage / 100) * totalMinutes * 60);
+    return {
+      id: type,
+      name: defaults.name,
+      percentage: defaults.percentage,
+      durationSeconds,
+      description: defaults.description,
+      icon: defaults.icon,
+      color: defaults.color,
+      isActive: false,
+      isCompleted: false,
+      elapsedSeconds: 0,
+    };
+  });
+}
+
 export default function Home() {
-  const [timeMinutes, setTimeMinutes] = useState(20);
-  const [seconds, setSeconds] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
+  const [view, setView] = useState<AppView>("creator");
+  const [totalMinutes, setTotalMinutes] = useState(60);
+  const [segments, setSegments] = useState<SessionSegment[]>(createSegments(60));
+  const [masterTimeSeconds, setMasterTimeSeconds] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentScale, setCurrentScale] = useState<Scale | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<MetronomeSettings>(DEFAULT_SETTINGS);
 
-  const { playClick } = useMetronome(settings, isRunning);
-  const { playNote } = usePlayNote();
+  const { playNote, playNoteUp } = usePlayNote();
 
-  const formatTime = (mins: number, secs: number) => {
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
+  const activeSegment = segments.find((s) => s.isActive);
 
-  const handleNextScale = useCallback(() => {
-    const scale = generateScale();
-    setCurrentScale(scale);
-  }, []);
+  const handleSegmentPercentageChange = useCallback((id: string, percentage: number) => {
+    setSegments((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === id) {
+          return {
+            ...s,
+            percentage,
+            durationSeconds: Math.round((percentage / 100) * totalMinutes * 60),
+          };
+        }
+        return s;
+      });
+      return updated;
+    });
+  }, [totalMinutes]);
+
+  const handleSegmentPercentageChangeMinutes = useCallback((minutes: number) => {
+    if (!activeSegment) return;
+    const newDurationSeconds = minutes * 60;
+    const newPercentage = (newDurationSeconds / (totalMinutes * 60)) * 100;
+    
+    setSegments((prev) => {
+      const scaleRemaining = prev.reduce((sum, s) => {
+        if (s.id === "technical") return sum;
+        return sum + s.durationSeconds;
+      }, 0);
+      
+      return prev.map((s) => {
+        if (s.id === "technical") {
+          return {
+            ...s,
+            percentage: ((totalMinutes * 60 - scaleRemaining - newDurationSeconds) / (totalMinutes * 60)) * 100,
+            durationSeconds: totalMinutes * 60 - scaleRemaining - newDurationSeconds,
+          };
+        }
+        if (s.id === activeSegment.id) {
+          return {
+            ...s,
+            durationSeconds: newDurationSeconds,
+            percentage: (newDurationSeconds / (totalMinutes * 60)) * 100,
+          };
+        }
+        return s;
+      });
+    });
+  }, [activeSegment, totalMinutes]);
+
+  const startSession = useCallback(() => {
+    const totalSeconds = totalMinutes * 60;
+    setMasterTimeSeconds(totalSeconds);
+    setSegments((prev) => {
+      const updated = prev.map((s, i) => ({
+        ...s,
+        isActive: i === 0,
+        isCompleted: false,
+        elapsedSeconds: 0,
+        durationSeconds: Math.round((s.percentage / 100) * totalSeconds),
+      }));
+      return updated;
+    });
+    setView("active");
+  }, [totalMinutes]);
+
+  const nextSegment = useCallback(() => {
+    setSegments((prev) => {
+      const currentIndex = prev.findIndex((s) => s.isActive);
+      const updated = prev.map((s) => ({
+        ...s,
+        isActive: false,
+        isCompleted: s.isCompleted || (s.isActive && s.elapsedSeconds >= s.durationSeconds),
+      }));
+      
+      if (currentIndex < prev.length - 1) {
+        updated[currentIndex + 1].isActive = true;
+        updated[currentIndex + 1].isCompleted = false;
+      }
+      
+      const allCompleted = updated.every((s) => s.isCompleted || s.isActive);
+      if (allCompleted) {
+        setView("summary");
+      }
+      
+      return updated;
+    });
+    
+    if (segments.find((s) => s.isActive)?.id === "technical") {
+      setCurrentScale(generateScale());
+    }
+  }, [segments]);
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (view !== "active" || isPaused) return;
 
     const interval = setInterval(() => {
-      setSeconds((prev) => {
-        if (prev === 0) {
-          const newMins = timeMinutes - 1;
-          if (newMins < 0) {
-            setIsRunning(false);
-            return 0;
-          }
-          setTimeMinutes(newMins);
-          return 59;
+      setMasterTimeSeconds((prev) => {
+        if (prev <= 0) {
+          setView("summary");
+          return 0;
         }
         return prev - 1;
+      });
+
+      setSegments((prev) => {
+        const updated = prev.map((s) => {
+          if (s.isActive) {
+            const newElapsed = s.elapsedSeconds + 1;
+            if (newElapsed >= s.durationSeconds) {
+              return { ...s, elapsedSeconds: newElapsed, isCompleted: true };
+            }
+            return { ...s, elapsedSeconds: newElapsed };
+          }
+          return s;
+        });
+
+        const justCompleted = updated.find(
+          (s, i) => s.isCompleted && !prev[i].isCompleted
+        );
+        if (justCompleted && justCompleted.id === "technical") {
+          setCurrentScale(generateScale());
+        }
+
+        const completedIndex = updated.findIndex((s) => s.isCompleted && !s.isActive);
+        if (completedIndex !== -1 && completedIndex < updated.length - 1) {
+          const nextIndex = completedIndex + 1;
+          if (!updated[nextIndex].isActive) {
+            updated[nextIndex] = { ...updated[nextIndex], isActive: true };
+          }
+        }
+
+        const allCompleted = updated.every((s) => s.isCompleted);
+        if (allCompleted) {
+          setTimeout(() => setView("summary"), 100);
+        }
+
+        return updated;
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isRunning, timeMinutes]);
+  }, [view, isPaused]);
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (view === "active" && activeSegment?.id === "technical" && !currentScale) {
+      setCurrentScale(generateScale());
+    }
+  }, [view, activeSegment, currentScale]);
 
-    const scaleInterval = setInterval(() => {
-      handleNextScale();
-    }, 60000);
+  const handleNextScale = useCallback(() => {
+    setCurrentScale(generateScale());
+  }, []);
 
-    return () => clearInterval(scaleInterval);
-  }, [isRunning, handleNextScale]);
-
-  const handleStart = () => {
-    handleNextScale();
-    setIsRunning(true);
+  const handleTogglePause = () => {
+    setIsPaused((prev) => !prev);
   };
 
   const handleStop = () => {
-    setIsRunning(false);
-    setTimeMinutes(20);
-    setSeconds(0);
-    setCurrentScale(null);
+    setSegments((prev) => prev.map((s) => ({ ...s, isCompleted: true })));
+    setView("summary");
   };
 
+  const handleNewSession = () => {
+    setView("creator");
+    setSegments(createSegments(totalMinutes));
+    setCurrentScale(null);
+    setMasterTimeSeconds(0);
+    setIsPaused(false);
+  };
+
+  useEffect(() => {
+    setSegments(createSegments(totalMinutes));
+  }, [totalMinutes]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "r" || e.key === "R") {
+        if (view === "active" && activeSegment?.id === "technical") {
+          handleNextScale();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [view, activeSegment, handleNextScale]);
+
   return (
-    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-8">
+    <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4 md:p-8">
       <h1 className="text-4xl font-bold text-green-400 mb-8">ScaleMaster</h1>
 
-      <div className="w-full max-w-xl border-2 border-green-600 rounded-lg p-6">
-        <div className="text-center mb-6">
-          <p className="text-gray-400 mb-2">Practice Time</p>
-          <div className="text-8xl font-mono text-cyan-400">
-            {formatTime(timeMinutes, seconds)}
-          </div>
-        </div>
-
-        {!isRunning && (
-          <div className="mb-6 text-center">
-            <label className="text-gray-400 mr-2">Minutes:</label>
-            <input
-              type="number"
-              value={timeMinutes}
-              onChange={(e) => setTimeMinutes(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-20 bg-gray-800 text-white border border-gray-600 rounded px-3 py-1 text-center"
-              min="1"
-            />
-          </div>
-        )}
-
-        {currentScale && (
-          <div className="text-center mb-6 p-4 bg-gray-800 rounded">
-            <p className="text-gray-400 text-sm mb-1">Scale to practice:</p>
-            <p className="text-2xl font-bold text-green-400">
-              {currentScale.root} {currentScale.name}
-            </p>
-            <p className="text-cyan-300 mt-2 flex flex-wrap justify-center gap-2">
-              {currentScale.notes.map((note, i) => (
-                <button
-                  key={i}
-                  onClick={() => playNote(note)}
-                  className="hover:text-white hover:scale-110 transition-all cursor-pointer px-2 py-1 rounded hover:bg-cyan-500/20"
-                  title={`Play ${note}`}
-                >
-                  {note}
-                </button>
-              ))}
-            </p>
-            <p className="text-gray-500 text-xs mt-1">{currentScale.category}</p>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-3">
-          {!isRunning ? (
-            <>
-              <button
-                onClick={handleStart}
-                className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded font-bold transition-colors"
-              >
-                START SESSION
-              </button>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded transition-colors"
-              >
-                METRONOME SETTINGS
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={handleNextScale}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded transition-colors"
-              >
-                NEXT SCALE (R)
-              </button>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setSettings({ ...settings, enabled: !settings.enabled })}
-                  className={`flex-1 py-2 rounded transition-colors ${
-                    settings.enabled
-                      ? "bg-green-600 hover:bg-green-500"
-                      : "bg-gray-700 hover:bg-gray-600"
-                  } text-white`}
-                >
-                  {settings.enabled ? "METRONOME ON" : "METRONOME OFF"}
-                </button>
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded transition-colors"
-                >
-                  SETTINGS
-                </button>
-              </div>
-              <button
-                onClick={handleStop}
-                className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded transition-colors"
-              >
-                STOP
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {settings.enabled && (
-        <p className="mt-4 text-gray-500 text-sm">
-          Metronome: {settings.speed} BPM
-        </p>
+      {view === "creator" && (
+        <SessionCreator
+          totalMinutes={totalMinutes}
+          onTotalMinutesChange={setTotalMinutes}
+          segments={segments}
+          onSegmentPercentageChange={handleSegmentPercentageChange}
+          onStartSession={startSession}
+        />
       )}
 
-      <p className="mt-8 text-gray-500 text-sm">
-        Press <kbd className="bg-gray-800 px-2 py-1 rounded">R</kbd> for next scale
-      </p>
+      {view === "active" && (
+        <ActiveSession
+          segments={segments}
+          masterTimeSeconds={masterTimeSeconds}
+          isPaused={isPaused}
+          settings={settings}
+          currentScale={currentScale}
+          onTogglePause={handleTogglePause}
+          onSkipSegment={nextSegment}
+          onMetronomeToggle={() => setSettings({ ...settings, enabled: !settings.enabled })}
+          onSettingsClick={() => setShowSettings(true)}
+          onNextScale={handleNextScale}
+          onStop={handleStop}
+          onPlayNote={(note) => playNote(note, 3)}
+          onSegmentPercentageChange={handleSegmentPercentageChange}
+          onSegmentPercentageChangeMinutes={handleSegmentPercentageChangeMinutes}
+        />
+      )}
+
+      {view === "summary" && (
+        <SessionSummary
+          segments={segments}
+          totalMinutes={totalMinutes}
+          onNewSession={handleNewSession}
+        />
+      )}
 
       {showSettings && (
         <MetronomeSettingsModal

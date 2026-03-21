@@ -64,5 +64,13 @@ export function usePlayNote() {
     oscillator.stop(ctx.currentTime + duration);
   }, [getAudioContext]);
 
-  return { playNote };
+  const playNoteUp = useCallback((note: string, octave = 4, duration = 0.5) => {
+    playNote(note, octave + 1, duration);
+  }, [playNote]);
+
+  const playNoteDown = useCallback((note: string, octave = 4, duration = 0.5) => {
+    playNote(note, octave - 1, duration);
+  }, [playNote]);
+
+  return { playNote, playNoteUp, playNoteDown };
 }
