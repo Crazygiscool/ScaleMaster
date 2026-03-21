@@ -11,6 +11,7 @@ import SessionSummary from "@/components/SessionSummary";
 import Tuner from "@/components/Tuner";
 import DonutChart from "@/components/DonutChart";
 import { SEGMENT_DEFAULTS as SEGMENT_DEFS, SegmentType } from "@/types/scale";
+import ActiveSession from "@/components/ActiveSession";
 
 type AppView = "creator" | "active" | "summary";
 
@@ -104,17 +105,17 @@ export default function Home() {
         isActive: false,
         isCompleted: s.isCompleted || (s.isActive && s.elapsedSeconds >= s.durationSeconds),
       }));
-      
+
       if (currentIndex < prev.length - 1) {
         updated[currentIndex + 1].isActive = true;
         updated[currentIndex + 1].isCompleted = false;
       }
-      
+
       const allCompleted = updated.every((s) => s.isCompleted || s.isActive);
       if (allCompleted) {
         setView("summary");
       }
-      
+
       return updated;
     });
   }, []);
@@ -403,9 +404,9 @@ export default function Home() {
       </div>
 
       <footer className="fixed bottom-0 left-0 right-0 text-center py-2 text-gray-600 text-sm">
-        <a 
-          href="https://github.com/crazygiscool" 
-          target="_blank" 
+        <a
+          href="https://github.com/crazygiscool"
+          target="_blank"
           rel="noopener noreferrer"
           className="hover:text-gray-400 transition-colors"
         >
